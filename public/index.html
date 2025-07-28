@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Share</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔗 P2P File Share</h1>
+            <p>Share files directly between browsers using WebRTC</p>
+        </header>
+
+        <main>
+            <!-- Your Code Section -->
+            <section class="code-section">
+                <h2>Your Code</h2>
+                <div class="code-display">
+                    <span id="yourCode">Connecting...</span>
+                    <button id="copyCodeBtn" class="copy-btn" title="Copy to clipboard">📋</button>
+                </div>
+                <p class="code-help">Share this code with someone to receive files</p>
+            </section>
+
+            <!-- Connect Section -->
+            <section class="connect-section">
+                <h2>Connect to Someone</h2>
+                <div class="input-group">
+                    <input type="text" id="peerCodeInput" placeholder="Enter their 12-character code" maxlength="12">
+                    <button id="connectBtn">Connect</button>
+                </div>
+            </section>
+
+            <!-- Connection Status -->
+            <section class="status-section">
+                <div id="statusDisplay" class="status-display">
+                    <span class="status-text">Not connected</span>
+                </div>
+            </section>
+
+            <!-- File Sharing Section -->
+            <section class="file-section" id="fileSection" style="display: none;">
+                <h2>File Transfer</h2>
+
+                <!-- Send Files -->
+                <div class="file-send">
+                    <h3>Send Files</h3>
+                    <div class="file-input-area" id="fileInputArea">
+                        <input type="file" id="fileInput" multiple>
+                        <div class="file-drop-zone" id="fileDropZone">
+                            <p>🗂️ Click to select files or drag and drop</p>
+                        </div>
+                    </div>
+                    <div id="sendProgress" class="progress-section" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="sendProgressFill"></div>
+                        </div>
+                        <div class="progress-text" id="sendProgressText">0%</div>
+                    </div>
+                </div>
+
+                <!-- Received Files -->
+                <div class="file-receive">
+                    <h3>Received Files</h3>
+                    <div id="receivedFiles" class="received-files">
+                        <p class="no-files">No files received yet</p>
+                    </div>
+                    <div id="receiveProgress" class="progress-section" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="receiveProgressFill"></div>
+                        </div>
+                        <div class="progress-text" id="receiveProgressText">0%</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Connection Modal -->
+        <div id="connectionModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>Incoming Connection</h3>
+                <p>User <strong id="incomingCode"></strong> wants to connect with you for file sharing.</p>
+                <div class="modal-buttons">
+                    <button id="acceptBtn" class="accept-btn">Accept</button>
+                    <button id="rejectBtn" class="reject-btn">Reject</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Area -->
+        <div id="notifications" class="notifications"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
