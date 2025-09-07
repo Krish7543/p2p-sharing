@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sendify - Ultimate P2P Communication Platform</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body data-color-scheme="dark">
+    <!-- Homepage Screen -->
+    <div class="screen" id="homeScreen">
+        <div class="home-container">
+            <!-- Animated Background -->
+            <div class="animated-background">
+                <div class="gradient-orb orb-1"></div>
+                <div class="gradient-orb orb-2"></div>
+                <div class="gradient-orb orb-3"></div>
+                <div class="gradient-orb orb-4"></div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="home-content">
+                <!-- Logo Section -->
+                <div class="logo-section">
+                    <div class="gradient-logo">
+                        <h1 class="logo-text">Sendify</h1>
+                        <div class="logo-tagline">Ultimate P2P Communication</div>
+                    </div>
+                    <div class="feature-badges">
+                        <span class="badge">Unlimited Files</span>
+                        <span class="badge">HD Calls</span>
+                        <span class="badge">Real-time Chat</span>
+                        <span class="badge">Screen Share</span>
+                    </div>
+                </div>
+
+                <!-- Connection Panel -->
+                <div class="connection-panel">
+                    <div class="glass-card">
+                        <div class="connection-section">
+                            <h2>Your Connection Code</h2>
+                            <div class="connection-status" id="connectionStatus">
+                                <div class="status-indicator waiting"></div>
+                                <span>Connecting to Network...</span>
+                            </div>
+                            <div class="code-display">
+                                <div class="code-value" id="connectionCode">••••••••</div>
+                                <button id="copyCode" class="btn btn-gradient" disabled>
+                                    <span class="btn-icon">📋</span>
+                                    Copy Code
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="divider">
+                            <span>OR</span>
+                        </div>
+
+                        <div class="connection-section">
+                            <h2>Connect to Peer</h2>
+                            <div class="connection-input">
+                                <input 
+                                    type="text" 
+                                    id="peerCode" 
+                                    class="form-control glass-input" 
+                                    placeholder="Enter 12-character code"
+                                    maxlength="12"
+                                    disabled
+                                >
+                                <button id="connectBtn" class="btn btn-primary-gradient" disabled>
+                                    <span class="btn-icon">🔗</span>
+                                    Connect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Info -->
+                    <div class="connection-info">
+                        <p>Share your code with anyone to establish a secure, direct connection</p>
+                        <div class="server-status">
+                            <span id="serverEndpoint">ws://localhost:3000</span>
+                            <div class="status-dot" id="serverStatus"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Communication Hub Screen -->
+    <div class="screen hidden" id="hubScreen">
+        <div class="hub-container">
+            <!-- Header -->
+            <header class="hub-header">
+                <div class="header-content">
+                    <div class="header-left">
+                        <div class="logo-mini">Sendify</div>
+                        <div class="connection-info">
+                            <span class="peer-id" id="connectedPeerId">Connected to: ••••••••</span>
+                            <div class="connection-quality">
+                                <div class="quality-indicator" id="qualityIndicator">
+                                    <div class="quality-bar">
+                                        <div class="quality-fill" id="qualityFill"></div>
+                                    </div>
+                                    <span id="qualityText">Excellent</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <button id="disconnectBtn" class="btn btn-outline">
+                            <span class="btn-icon">📵</span>
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Tab Navigation removed -->
+
+            <!-- Tab Content -->
+            <main class="tab-content">
+                <div class="tab-panel active" id="filesTab">
+                    <div class="files-container">
+                        <div class="files-section">
+                            <div class="section-header">
+                                <h3>File Transfer</h3>
+                                <div class="transfer-stats">
+                                    <span id="transferSpeed">0 MB/s</span>
+                                    <span id="totalTransferred">0 MB transferred</span>
+                                </div>
+                            </div>
+
+                            <!-- File Drop Zone -->
+                            <div class="file-drop-zone" id="fileDropZone">
+                                <div class="drop-content">
+                                    <div class="drop-icon">📎</div>
+                                    <h4>Drop files anywhere or click to select</h4>
+                                    <p>No size limits - transfer files of any size</p>
+                                    <button class="btn btn-gradient" id="selectFilesBtn">
+                                        <span class="btn-icon">📂</span>
+                                        Select Files
+                                    </button>
+                                </div>
+                                <input type="file" id="fileInput" multiple style="display: none;">
+                            </div>
+
+                            <!-- File Queue -->
+                            <div class="file-queue hidden" id="fileQueue">
+                                <div class="queue-header">
+                                    <h4>Ready to Send</h4>
+                                    <div class="queue-actions">
+                                        <button id="clearQueue" class="btn btn-outline btn-sm">Clear All</button>
+                                        <button id="sendFiles" class="btn btn-primary-gradient">
+                                            <span class="btn-icon">🚀</span>
+                                            Send Files
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="file-list" id="fileList"></div>
+                            </div>
+
+                            <!-- Transfer Progress (Lightning-style) -->
+                            <div class="transfer-progress hidden transfer-card" id="transferProgress">
+                                <div class="transfer-card__header">
+                                    <div class="transfer-icon" id="transferIcon">⬇️</div>
+                                    <div class="transfer-titles">
+                                        <div class="transfer-title"><span id="transferAction">Downloading</span> “ <span id="transferFileName">file-name</span> ”</div>
+                                        <div class="transfer-subtitle">Please wait while we transfer your file.</div>
+                                    </div>
+                                    <button id="cancelTransfer" class="btn btn-cancel">Cancel</button>
+                                </div>
+                                <div class="transfer-card__body">
+                                    <div class="progress-bar progress--lg">
+                                        <div class="progress-fill" id="progressFill"></div>
+                                    </div>
+                                    <div class="progress-meta">
+                                        <span id="progressPercent">0%</span>
+                                        <span class="dot">•</span>
+                                        <span id="progressFiles">Calculating files…</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Sidebar (replaces previous history sidebar) -->
+                        <div class="chat-section">
+                            <h4>Chat</h4>
+                            <div class="chat-container">
+                                <div class="chat-messages" id="chatMessages">
+                                    <div class="welcome-message">
+                                        <span>Chat connected! Start messaging...</span>
+                                    </div>
+                                </div>
+                                <div class="chat-input-container">
+                                    <div class="typing-indicator hidden" id="typingIndicator">
+                                        <span>Peer is typing...</span>
+                                        <div class="typing-dots">
+                                            <div class="dot"></div>
+                                            <div class="dot"></div>
+                                            <div class="dot"></div>
+                                        </div>
+                                    </div>
+                                    <div class="chat-input">
+                                        <button id="attachFile" class="attach-btn">
+                                            <span class="btn-icon">📎</span>
+                                        </button>
+                                        <input 
+                                            type="text" 
+                                            id="messageInput" 
+                                            class="form-control message-input" 
+                                            placeholder="Type a message..."
+                                            maxlength="1000"
+                                        >
+                                        <button id="sendMessage" class="btn btn-primary-gradient send-btn">
+                                            <span class="btn-icon">📤</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Moved Transfer History to bottom -->
+                    <div class="history-section" id="historyBottom">
+                        <h4>Transfer History</h4>
+                        <div class="transfer-history" id="transferHistory">
+                            <div class="empty-state">
+                                <span>No transfers yet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Picture-in-Picture Video -->
+    <div class="pip-video hidden" id="pipVideo">
+        <video autoplay playsinline muted></video>
+        <div class="pip-controls">
+            <button id="closePip" class="pip-btn">✕</button>
+            <button id="expandPip" class="pip-btn">⛶</button>
+        </div>
+    </div>
+
+    <!-- File Offer Modal -->
+    <div class="modal hidden" id="fileOfferModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3>Incoming File Transfer</h3>
+                <div class="file-count" id="fileCount">0 files</div>
+            </div>
+            <div class="modal-body">
+                <div class="file-preview" id="filePreview"></div>
+                <div class="transfer-warning">
+                    <p>⚠️ Only accept files from trusted sources</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="rejectOffer" class="btn btn-outline">Decline</button>
+                <button id="acceptOffer" class="btn btn-primary-gradient">Accept Transfer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Offer Modal -->
+    <div class="modal hidden" id="callOfferModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="callOfferTitle">Incoming Call</h3>
+                <div class="call-type" id="callOfferType">Video Call</div>
+            </div>
+            <div class="modal-body">
+                <div class="caller-info">
+                    <div class="caller-avatar">📞</div>
+                    <p>Peer wants to start a call with you</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="rejectCall" class="btn btn-outline">Decline</button>
+                <button id="acceptCall" class="btn btn-primary-gradient">Accept</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="notification-container" id="notifications"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
