@@ -1,11 +1,14 @@
 class P2PFileShare {
   constructor() {
     this.peer = null;
-    this.connection = null;
     this.ws = null;
     this.myCode = '';
     this.isConnected = false;
     
+    this.dataChannels = [];
+    this.NUM_CHANNELS = 8;
+    this.channelsReady = 0;
+
     // File transfer state
     this.fileTransfers = {};
     
@@ -185,16 +188,13 @@ class P2PFileShare {
   handleConnectionAccepted(fromCode) {
     this.updateStatus(`Connection accepted by ${fromCode}. Establishing P2P...`);
     
-    try {
-      this.connection = this.peer.connect(fromCode, {
-        reliable: true,
-        serialization: 'binary'
-      });
-      
-      this.setupConnection(this.connection);
-    } catch (error) {
-      console.error('Connection error:', error);
-      this.notify('Failed to connect', 'error');
+    for (let i = 0; i < this.NUM_CHANNELS; i++) {
+        const conn = this.peer.connect(fromCode, {
+            label: `ft_${i}`,
+            reliable: true,
+            serialization: 'binary'
+        });
+        this.setupDataChannel(conn);
     }
   }
 
@@ -314,7 +314,7 @@ class P2PFileShare {
 
       this.peer.on('connection', (conn) => {
         console.log('Incoming data connection from:', conn.peer);
-        this.handleIncomingDataConnection(conn);
+        this.setupDataChannel(conn);
       });
 
       this.peer.on('error', (error) => {
@@ -487,41 +487,29 @@ class P2PFileShare {
     this.updateStatus(`Requesting connection to ${peerCode}...`);
   }
 
-  handleIncomingDataConnection(conn) {
-    this.connection = conn;
-    this.setupConnection(conn);
-  }
-
-  setupConnection(conn) {
-    if (!conn) return;
-
+  setupDataChannel(conn) {
     conn.on('open', () => {
-      console.log('Data connection opened with:', conn.peer);
-      this.isConnected = true;
-      this.updateStatus('Connected! Ready to share files.');
-      
-      // Switch to hub screen
-      this.switchToHub(conn.peer);
+        this.dataChannels.push(conn);
+        this.dataChannels.sort((a, b) => a.label.localeCompare(b.label));
+        
+        if (this.dataChannels.length === this.NUM_CHANNELS) {
+            this.isConnected = true;
+            this.updateStatus('Connected! Ready to share files.');
+            this.switchToHub(this.dataChannels[0].peer);
+        }
     });
 
     conn.on('data', (data) => {
-      this.handleReceivedData(data);
+        this.handleReceivedData(data);
     });
 
     conn.on('close', () => {
-      console.log('Data connection closed');
-      this.isConnected = false;
-      this.updateStatus('Connection closed');
-      this.connection = null;
-      this.switchToHome();
+        this.disconnect();
     });
 
     conn.on('error', (error) => {
-      console.error('Data connection error:', error);
-      this.isConnected = false;
-      this.updateStatus('Connection error');
-      this.connection = null;
-      this.notify('Connection error: ' + error, 'error');
+        console.error('Data channel error:', error);
+        this.disconnect();
     });
   }
 
@@ -552,12 +540,12 @@ class P2PFileShare {
   }
 
   disconnect() {
-    if (this.connection) {
-      this.connection.close();
-    }
-    
+    this.dataChannels.forEach(channel => {
+        if (channel) channel.close();
+    });
+    this.dataChannels = [];
+    this.channelsReady = 0;
     this.isConnected = false;
-    this.connection = null;
     this.updateStatus('Disconnected');
     this.switchToHome();
   }
@@ -575,9 +563,9 @@ class P2PFileShare {
   }
 
   async sendFile(file) {
-    if (!this.connection || !this.isConnected) {
-        this.notify('No active connection', 'error');
-        return;
+    if (!this.isConnected) {
+      this.notify('No active connection', 'error');
+      return;
     }
 
     const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
@@ -607,7 +595,8 @@ class P2PFileShare {
         lastModified: file.lastModified,
         totalChunks: totalChunks
     };
-    this.connection.send(metadata);
+
+    this.dataChannels[0].send(metadata);
     this.updateStatus(`Starting transfer of ${file.name}...`);
 
     this.sendNextChunk(transferId);
@@ -641,7 +630,8 @@ class P2PFileShare {
           data: arrayBuffer
       };
 
-      this.connection.send(chunkData);
+      const channelIndex = chunkIndex % this.NUM_CHANNELS;
+      this.dataChannels[channelIndex].send(chunkData);
       transfer.inFlight++;
 
       transfer.retransmits[chunkIndex] = setTimeout(() => {
@@ -734,7 +724,7 @@ class P2PFileShare {
     }
     transfer.receivedChunks++;
 
-    this.connection.send({
+    this.dataChannels[0].send({
         type: 'file-chunk-ack',
         transferId: chunkData.transferId,
         chunkIndex: chunkData.chunkIndex
