@@ -152,8 +152,24 @@ class P2PFileShare {
   }
 
   handleIncomingConnection(fromCode) {
-    const accept = confirm(`Accept connection from ${fromCode}?`);
-    if (accept) {
+    const modal = document.getElementById('connectionRequestModal');
+    const codeSpan = document.getElementById('connectionRequestCode');
+    
+    if (modal && codeSpan) {
+        codeSpan.textContent = fromCode;
+        modal.classList.remove('hidden');
+        modal.dataset.fromCode = fromCode;
+    }
+  }
+
+  handleConnectionDecision(accepted) {
+    const modal = document.getElementById('connectionRequestModal');
+    if (!modal) return;
+
+    const fromCode = modal.dataset.fromCode;
+    if (!fromCode) return;
+
+    if (accepted) {
       this.sendWebSocketMessage({
         type: 'accept-connection',
         targetCode: fromCode
@@ -164,11 +180,25 @@ class P2PFileShare {
         targetCode: fromCode
       });
     }
+
+    modal.classList.add('hidden');
+    delete modal.dataset.fromCode;
   }
 
   handleConnectionAccepted(fromCode) {
     this.updateStatus(`Connection accepted by ${fromCode}. Establishing P2P...`);
-    // PeerJS connection will be handled in setupConnection
+    
+    try {
+      this.connection = this.peer.connect(fromCode, {
+        reliable: true,
+        serialization: 'binary'
+      });
+      
+      this.setupConnection(this.connection);
+    } catch (error) {
+      console.error('Connection error:', error);
+      this.notify('Failed to connect', 'error');
+    }
   }
 
   handleConnectionRejected(fromCode) {
@@ -345,6 +375,17 @@ class P2PFileShare {
 
     // File handling
     this.setupFileHandling();
+
+    // Connection Modal Buttons
+    const acceptBtn = document.getElementById('acceptConnectionBtn');
+    const rejectBtn = document.getElementById('rejectConnectionBtn');
+
+    if (acceptBtn) {
+        acceptBtn.onclick = () => this.handleConnectionDecision(true);
+    }
+    if (rejectBtn) {
+        rejectBtn.onclick = () => this.handleConnectionDecision(false);
+    }
   }
 
   setupTabNavigation() {
@@ -446,20 +487,7 @@ class P2PFileShare {
       targetCode: peerCode
     });
 
-    this.updateStatus(`Connecting to ${peerCode}...`);
-
-    // Initiate PeerJS connection
-    try {
-      this.connection = this.peer.connect(peerCode, {
-        reliable: true,
-        serialization: 'binary'
-      });
-      
-      this.setupConnection(this.connection);
-    } catch (error) {
-      console.error('Connection error:', error);
-      this.notify('Failed to connect', 'error');
-    }
+    this.updateStatus(`Requesting connection to ${peerCode}...`);
   }
 
   handleIncomingDataConnection(conn) {
