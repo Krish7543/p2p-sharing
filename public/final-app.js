@@ -581,7 +581,7 @@ class P2PFileShare {
     }
 
     const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const CHUNK_SIZE = 16 * 1024;
+    const CHUNK_SIZE = 500 * 1024;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
     this.fileTransfers[transferId] = {
@@ -591,7 +591,7 @@ class P2PFileShare {
         totalChunks: totalChunks,
         nextChunkIndex: 0,
         chunksAcked: new Set(),
-        windowSize: 16,
+        windowSize: 4,
         inFlight: 0,
         startTime: Date.now(),
         lastAckTime: Date.now(),
@@ -605,7 +605,8 @@ class P2PFileShare {
         name: file.name,
         size: file.size,
         mimeType: file.type,
-        lastModified: file.lastModified
+        lastModified: file.lastModified,
+        totalChunks: totalChunks
     };
     this.connection.send(metadata);
     this.updateStatus(`Starting transfer of ${file.name}...`);
@@ -711,7 +712,8 @@ class P2PFileShare {
       size: metadata.size,
       mimeType: metadata.mimeType,
       chunks: [],
-      receivedChunks: 0
+      receivedChunks: 0,
+      totalChunks: metadata.totalChunks
     };
 
     this.updateStatus(`Receiving ${metadata.name}...`);
@@ -734,11 +736,11 @@ class P2PFileShare {
         receivedAt: Date.now()
     });
 
-    const progress = (transfer.receivedChunks / Math.ceil(transfer.size / (16*1024)) * 100).toFixed(1);
+    const progress = (transfer.receivedChunks / transfer.totalChunks * 100).toFixed(1);
     this.updateProgressUI(progress);
     this.updateStatus(`Receiving ${transfer.name}: ${progress}%`);
 
-    if (transfer.receivedChunks === Math.ceil(transfer.size / (16*1024))) {
+    if (transfer.receivedChunks === transfer.totalChunks) {
       this.assembleAndDownloadFile(chunkData.transferId);
     }
   }
