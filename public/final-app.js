@@ -6,7 +6,7 @@ class P2PFileShare {
     this.isConnected = false;
     
     this.dataChannels = [];
-    this.NUM_CHANNELS = 8;
+    this.NUM_CHANNELS = 20;
     this.channelsReady = 0;
 
     // File transfer state
@@ -724,7 +724,7 @@ class P2PFileShare {
     }
     transfer.receivedChunks++;
 
-    this.dataChannels[0].send({
+    this.dataChannels[chunkData.channelIndex].send({
         type: 'file-chunk-ack',
         transferId: chunkData.transferId,
         chunkIndex: chunkData.chunkIndex
