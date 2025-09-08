@@ -7,10 +7,10 @@ class P2PFileShare {
     
     this.dataChannels = [];
     // this.NUM_CHANNELS = 8; // Now set dynamically
-    this.channelsReady = 0;
+    this.channelsReady = 0;;
 
     // File transfer state
-    this.fileTransfers = {};
+    this.fileTransfers = {};;
     
     this.init();
   }
@@ -884,20 +884,6 @@ class P2PFileShare {
         notification.parentNode.removeChild(notification);
       }
     }, 3000);
-  }
-
-  initializeQRCode() {
-    const qrElement = document.getElementById('qrCode');
-    if (qrElement) {
-      qrElement.innerHTML = '<div class="qr-placeholder">Connecting to network...</div>';
-    }
-  }
-}
-
-// Initialize the application when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  window.p2pApp = new P2PFileShare();
-});}, 3000);
   }
 
   initializeQRCode() {
