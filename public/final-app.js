@@ -710,19 +710,20 @@ class P2PFileShare {
   handleFileChunk(chunkData) {
     const transfer = this.fileTransfers[chunkData.transferId];
     if (!transfer) {
+      console.error(`Receiver: Transfer state not found for chunk ${chunkData.chunkIndex} of transfer ${chunkData.transferId}`);
       return;
     }
 
-    if (!transfer.chunks) {
-        transfer.chunks = [];
-    }
-    
+    // Store the chunk
     transfer.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
     
-    if (!transfer.receivedChunks) {
-        transfer.receivedChunks = 0;
+    // Only add to set and increment if it's a new chunk
+    if (!transfer.receivedChunkIndices.has(chunkData.chunkIndex)) {
+        transfer.receivedChunkIndices.add(chunkData.chunkIndex);
+        console.log(`Receiver: New chunk ${chunkData.chunkIndex} received. Total unique received: ${transfer.receivedChunkIndices.size}/${transfer.totalChunks}`);
+    } else {
+        console.log(`Receiver: Duplicate chunk ${chunkData.chunkIndex} received. Total unique received: ${transfer.receivedChunkIndices.size}/${transfer.totalChunks}`);
     }
-    transfer.receivedChunks++;
 
     this.dataChannels[0].send({
         type: 'file-chunk-ack',
@@ -730,11 +731,12 @@ class P2PFileShare {
         chunkIndex: chunkData.chunkIndex
     });
 
-    const progress = (transfer.receivedChunks / transfer.totalChunks * 100).toFixed(1);
+    const progress = (transfer.receivedChunkIndices.size / transfer.totalChunks * 100).toFixed(1);
     this.updateProgressUI(progress);
     this.updateStatus(`Receiving ${transfer.name}: ${progress}%`);
 
-    if (transfer.receivedChunks === transfer.totalChunks) {
+    if (transfer.receivedChunkIndices.size === transfer.totalChunks) {
+      console.log(`Receiver: All chunks received for ${transfer.name}. Assembling file.`);
       this.assembleAndDownloadFile(chunkData.transferId);
     }
   }
