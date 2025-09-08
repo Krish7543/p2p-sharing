@@ -5,26 +5,12 @@ class P2PFileShare {
     this.ws = null;
     this.myCode = '';
     this.isConnected = false;
-    this.currentCall = null;
-    this.localStream = null;
-    this.remoteStream = null;
-    
-    // Ack synchronization state
-    this.pendingAcks = {};
-    this.lastTypingSentAt = 0;
-    this.typingTimeoutId = null;
     
     // File transfer state
     this.currentFileMetadata = null;
     this.fileChunks = [];
     this.currentTransferId = null;
     this.currentBatch = null;
-    
-    // Call state
-    this.callState = 'idle'; // idle, calling, receiving, connected
-    this.isVideoCall = false;
-    this.isMuted = false;
-    this.isVideoOff = false;
     
     this.init();
   }
@@ -304,11 +290,6 @@ class P2PFileShare {
         this.handleIncomingDataConnection(conn);
       });
 
-      this.peer.on('call', (call) => {
-        console.log('Incoming call from:', call.peer);
-        this.handleIncomingCall(call);
-      });
-
       this.peer.on('error', (error) => {
         console.error('PeerJS error:', error);
         this.updateStatus('PeerJS error: ' + error.type);
@@ -364,12 +345,6 @@ class P2PFileShare {
 
     // File handling
     this.setupFileHandling();
-    
-    // Chat functionality
-    this.setupChat();
-    
-    // Call functionality
-    this.setupCalls();
   }
 
   setupTabNavigation() {
@@ -439,71 +414,6 @@ class P2PFileShare {
     }
   }
 
-  setupChat() {
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendMessage');
-
-    if (sendBtn) {
-      sendBtn.onclick = () => this.sendChatMessage();
-    }
-
-    if (messageInput) {
-      messageInput.onkeypress = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          this.sendChatMessage();
-        }
-      };
-
-      messageInput.oninput = () => {
-        // Enable/disable send button
-        if (sendBtn) {
-          sendBtn.disabled = !messageInput.value.trim();
-        }
-        
-        // Send typing indicator
-        this.sendTypingIndicator();
-      };
-    }
-
-    // Initially disable send button
-    if (sendBtn) {
-      sendBtn.disabled = true;
-    }
-  }
-
-  setupCalls() {
-    // Video call button
-    const videoCallBtn = document.getElementById('videoCallBtn');
-    if (videoCallBtn) {
-      videoCallBtn.onclick = () => this.startVideoCall();
-    }
-
-    // Voice call button
-    const voiceCallBtn = document.getElementById('voiceCallBtn');
-    if (voiceCallBtn) {
-      voiceCallBtn.onclick = () => this.startVoiceCall();
-    }
-
-    // End call button
-    const endCallBtn = document.getElementById('endCallBtn');
-    if (endCallBtn) {
-      endCallBtn.onclick = () => this.endCall();
-    }
-
-    // Mute button
-    const muteBtn = document.getElementById('muteBtn');
-    if (muteBtn) {
-      muteBtn.onclick = () => this.toggleMute();
-    }
-
-    // Video toggle button
-    const videoToggleBtn = document.getElementById('videoToggleBtn');
-    if (videoToggleBtn) {
-      videoToggleBtn.onclick = () => this.toggleVideo();
-    }
-  }
-
   connectToPeer() {
     const peerInput = document.getElementById('peerCode');
     if (!peerInput) return;
@@ -563,7 +473,7 @@ class P2PFileShare {
     conn.on('open', () => {
       console.log('Data connection opened with:', conn.peer);
       this.isConnected = true;
-      this.updateStatus('Connected! Ready to share files and chat.');
+      this.updateStatus('Connected! Ready to share files.');
       
       // Switch to hub screen
       this.switchToHub(conn.peer);
@@ -617,10 +527,6 @@ class P2PFileShare {
   }
 
   disconnect() {
-    if (this.currentCall) {
-      this.endCall();
-    }
-    
     if (this.connection) {
       this.connection.close();
     }
@@ -709,12 +615,6 @@ class P2PFileShare {
       case 'file-chunk':
         this.handleFileChunk(data);
         break;
-      case 'chat':
-        this.handleChatMessage(data);
-        break;
-      case 'typing':
-        this.handleTypingIndicator();
-        break;
       default:
         console.log('Unknown data type:', data.type);
     }
@@ -785,325 +685,6 @@ class P2PFileShare {
       this.notify('Failed to download file', 'error');
     } finally {
       this.currentFileTransfer = null;
-    }
-  }
-
-  // Chat methods
-  sendChatMessage() {
-    const messageInput = document.getElementById('messageInput');
-    if (!messageInput) return;
-
-    const message = messageInput.value.trim();
-    if (!message || !this.isConnected || !this.connection) return;
-
-    try {
-      const chatData = {
-        type: 'chat',
-        message: message,
-        timestamp: Date.now()
-      };
-
-      this.connection.send(chatData);
-      this.addChatMessage(message, true, chatData.timestamp);
-      messageInput.value = '';
-      
-      // Disable send button until new input
-      const sendBtn = document.getElementById('sendMessage');
-      if (sendBtn) sendBtn.disabled = true;
-
-    } catch (error) {
-      console.error('Chat send error:', error);
-      this.notify('Failed to send message', 'error');
-    }
-  }
-
-  handleChatMessage(data) {
-    this.addChatMessage(data.message, false, data.timestamp);
-    this.hideTypingIndicator();
-  }
-
-  addChatMessage(message, isSent, timestamp) {
-    const messagesContainer = document.getElementById('chatMessages');
-    if (!messagesContainer) return;
-
-    // Remove welcome message if present
-    const welcomeMessage = messagesContainer.querySelector('.welcome-message');
-    if (welcomeMessage) {
-      welcomeMessage.remove();
-    }
-
-    const messageEl = document.createElement('div');
-    messageEl.className = `message ${isSent ? 'sent' : 'received'}`;
-
-    const messageContent = document.createElement('div');
-    messageContent.className = 'message-content';
-    messageContent.textContent = message;
-
-    const messageTime = document.createElement('div');
-    messageTime.className = 'message-time';
-    messageTime.textContent = new Date(timestamp).toLocaleTimeString();
-
-    messageEl.appendChild(messageContent);
-    messageEl.appendChild(messageTime);
-    messagesContainer.appendChild(messageEl);
-
-    // Scroll to bottom
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }
-
-  sendTypingIndicator() {
-    if (!this.connection || !this.isConnected) return;
-
-    const now = Date.now();
-    if (now - this.lastTypingSentAt < 1000) return; // Throttle
-
-    this.lastTypingSentAt = now;
-    
-    try {
-      this.connection.send({
-        type: 'typing',
-        timestamp: now
-      });
-    } catch (error) {
-      console.error('Typing indicator error:', error);
-    }
-  }
-
-  handleTypingIndicator() {
-    this.showTypingIndicator();
-    
-    // Hide after 2 seconds
-    if (this.typingTimeoutId) {
-      clearTimeout(this.typingTimeoutId);
-    }
-    
-    this.typingTimeoutId = setTimeout(() => {
-      this.hideTypingIndicator();
-    }, 2000);
-  }
-
-  showTypingIndicator() {
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) {
-      indicator.classList.remove('hidden');
-    }
-  }
-
-  hideTypingIndicator() {
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) {
-      indicator.classList.add('hidden');
-    }
-  }
-
-  // Call methods
-  async startVideoCall() {
-    if (!this.isConnected) {
-      this.notify('No active connection', 'error');
-      return;
-    }
-
-    try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-
-      this.isVideoCall = true;
-      this.callState = 'calling';
-      this.updateCallUI();
-
-      const call = this.peer.call(this.connection.peer, this.localStream);
-      this.setupCall(call);
-    } catch (error) {
-      console.error('Video call error:', error);
-      this.notify('Failed to start video call', 'error');
-    }
-  }
-
-  async startVoiceCall() {
-    if (!this.isConnected) {
-      this.notify('No active connection', 'error');
-      return;
-    }
-
-    try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: false,
-        audio: true
-      });
-
-      this.isVideoCall = false;
-      this.callState = 'calling';
-      this.updateCallUI();
-
-      const call = this.peer.call(this.connection.peer, this.localStream);
-      this.setupCall(call);
-    } catch (error) {
-      console.error('Voice call error:', error);
-      this.notify('Failed to start voice call', 'error');
-    }
-  }
-
-  async handleIncomingCall(call) {
-    if (this.currentCall) {
-      call.close();
-      return;
-    }
-
-    const accept = confirm(`Incoming ${call.metadata?.video ? 'video' : 'voice'} call. Accept?`);
-    
-    if (accept) {
-      try {
-        this.localStream = await navigator.mediaDevices.getUserMedia({
-          video: call.metadata?.video || false,
-          audio: true
-        });
-
-        this.isVideoCall = call.metadata?.video || false;
-        this.callState = 'connected';
-        
-        call.answer(this.localStream);
-        this.setupCall(call);
-        this.updateCallUI();
-      } catch (error) {
-        console.error('Call answer error:', error);
-        call.close();
-        this.notify('Failed to answer call', 'error');
-      }
-    } else {
-      call.close();
-    }
-  }
-
-  setupCall(call) {
-    this.currentCall = call;
-
-    call.on('stream', (remoteStream) => {
-      this.remoteStream = remoteStream;
-      this.callState = 'connected';
-      this.updateCallUI();
-      this.playRemoteStream(remoteStream);
-    });
-
-    call.on('close', () => {
-      this.endCall();
-    });
-
-    call.on('error', (error) => {
-      console.error('Call error:', error);
-      this.endCall();
-      this.notify('Call error', 'error');
-    });
-  }
-
-  playRemoteStream(stream) {
-    const remoteVideo = document.getElementById('remoteVideo');
-    const remoteAudio = document.getElementById('remoteAudio');
-
-    if (this.isVideoCall && remoteVideo) {
-      remoteVideo.srcObject = stream;
-      remoteVideo.play();
-    } else if (remoteAudio) {
-      remoteAudio.srcObject = stream;
-      remoteAudio.play();
-    }
-
-    // Also play local stream
-    const localVideo = document.getElementById('localVideo');
-    if (this.localStream && localVideo && this.isVideoCall) {
-      localVideo.srcObject = this.localStream;
-      localVideo.play();
-    }
-  }
-
-  endCall() {
-    if (this.currentCall) {
-      this.currentCall.close();
-      this.currentCall = null;
-    }
-
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
-    }
-
-    this.remoteStream = null;
-    this.callState = 'idle';
-    this.isVideoCall = false;
-    this.isMuted = false;
-    this.isVideoOff = false;
-
-    // Clear video elements
-    const remoteVideo = document.getElementById('remoteVideo');
-    const localVideo = document.getElementById('localVideo');
-    const remoteAudio = document.getElementById('remoteAudio');
-
-    if (remoteVideo) remoteVideo.srcObject = null;
-    if (localVideo) localVideo.srcObject = null;
-    if (remoteAudio) remoteAudio.srcObject = null;
-
-    this.updateCallUI();
-  }
-
-  toggleMute() {
-    if (!this.localStream) return;
-
-    const audioTrack = this.localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-      this.isMuted = !audioTrack.enabled;
-      this.updateCallUI();
-    }
-  }
-
-  toggleVideo() {
-    if (!this.localStream || !this.isVideoCall) return;
-
-    const videoTrack = this.localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled;
-      this.isVideoOff = !videoTrack.enabled;
-      this.updateCallUI();
-    }
-  }
-
-  updateCallUI() {
-    // Update call control buttons based on call state
-    const videoCallBtn = document.getElementById('videoCallBtn');
-    const voiceCallBtn = document.getElementById('voiceCallBtn');
-    const endCallBtn = document.getElementById('endCallBtn');
-    const muteBtn = document.getElementById('muteBtn');
-    const videoToggleBtn = document.getElementById('videoToggleBtn');
-    const activeCallControls = document.querySelector('.active-call-controls');
-
-    if (videoCallBtn) videoCallBtn.disabled = this.callState !== 'idle';
-    if (voiceCallBtn) voiceCallBtn.disabled = this.callState !== 'idle';
-    
-    if (activeCallControls) {
-      activeCallControls.style.display = this.callState !== 'idle' ? 'flex' : 'none';
-    }
-    
-    if (muteBtn) {
-      muteBtn.style.display = this.callState === 'connected' ? 'block' : 'none';
-      muteBtn.textContent = this.isMuted ? 'Unmute' : 'Mute';
-    }
-    
-    if (videoToggleBtn) {
-      videoToggleBtn.style.display = this.callState === 'connected' && this.isVideoCall ? 'block' : 'none';
-      videoToggleBtn.textContent = this.isVideoOff ? 'Video On' : 'Video Off';
-    }
-
-    // Show/hide video containers
-    const videoContainer = document.getElementById('videoContainer');
-    const voiceContainer = document.getElementById('voiceContainer');
-
-    if (videoContainer) {
-      videoContainer.style.display = this.callState === 'connected' && this.isVideoCall ? 'block' : 'none';
-    }
-    
-    if (voiceContainer) {
-      voiceContainer.style.display = this.callState === 'connected' && !this.isVideoCall ? 'block' : 'none';
     }
   }
 

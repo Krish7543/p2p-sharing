@@ -212,6 +212,18 @@
 
     <!-- Notifications -->
     <div class="notification-container" id="notifications"></div>
+
+    <!-- Connection Request Modal -->
+    <div class="modal-overlay hidden" id="connectionRequestModal">
+        <div class="modal-content">
+            <h3 id="connectionRequestText">Incoming Connection Request</h3>
+            <p>From code: <span id="connectionRequestCode"></span></p>
+            <div class="modal-actions">
+                <button id="acceptConnectionBtn" class="btn btn--primary">Accept</button>
+                <button id="rejectConnectionBtn" class="btn btn--secondary">Reject</button>
+            </div>
+        </div>
+    </div>
     
     <script src="final-app.js"></script>
 </body>
