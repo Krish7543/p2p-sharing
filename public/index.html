@@ -91,10 +91,9 @@
                     <!-- Features Box -->
                     <div class="glass-card" style="margin-top: 1rem;">
                         <div class="feature-badges">
-                            <span class="badge">Unlimited Files</span>
-                            <span class="badge">Real-time Chat</span>
-                            <span class="badge">Video Calls</span>
-                            <span class="badge">Voice Calls</span>
+                            <span class="badge">Unlimited File Transfers</span>
+                            <span class="badge">Secure & Fast</span>
+                            <span class="badge">Direct P2P</span>
                         </div>
                     </div>
 
@@ -119,35 +118,12 @@
                 <div class="header-content">
                     <div class="header-left">
                         <div class="logo-mini">Sendify</div>
-                        <div class="tabs">
-                            <button class="tab-btn active" data-tab="filesTab">
-                                <span class="tab-icon">FILES</span>
-                                <span class="tab-label">Files</span>
-                            </button>
-                            <button class="tab-btn" data-tab="chatTab">
-                                <span class="tab-icon">CHAT</span>
-                                <span class="tab-label">Chat</span>
-                            </button>
-                            <button class="tab-btn" data-tab="callTab">
-                                <span class="tab-icon">CALL</span>
-                                <span class="tab-label">Calls</span>
-                            </button>
-                        </div>
                     </div>
                     <div class="header-actions">
                         <div class="connection-info">
                             <span class="peer-id" id="connectedPeerId">Connected to: LOADING</span>
-                            <div class="connection-quality">
-                                <div class="quality-indicator" id="qualityIndicator">
-                                    <div class="quality-bar">
-                                        <div class="quality-fill" id="qualityFill"></div>
-                                    </div>
-                                    <span id="qualityText">Excellent</span>
-                                </div>
-                            </div>
                         </div>
                         <button id="disconnectBtn" class="disconnect-btn">
-                            <span class="btn-icon">DISC</span>
                             <span class="btn-text">Disconnect</span>
                         </button>
                     </div>
@@ -227,104 +203,6 @@
                     </div>
                 </div>
 
-                <!-- Chat Tab -->
-                <div class="tab-panel" id="chatTab">
-                    <div class="chat-container">
-                        <div class="chat-header">
-                            <h4>Chat with Peer</h4>
-                            <div class="chat-actions">
-                                <button id="clearChat" class="chat-action-btn" title="Clear chat">
-                                    <span class="btn-icon">CLEAR</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="chat-messages" id="chatMessages">
-                            <div class="welcome-message">
-                                <div class="welcome-content">
-                                    <div class="welcome-icon">CHAT</div>
-                                    <h3>Start a conversation</h3>
-                                    <p>Send a message to start chatting with your peer</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="chat-input-container">
-                            <div class="typing-indicator hidden" id="typingIndicator">
-                                <span>Peer is typing...</span>
-                                <div class="typing-dots">
-                                    <div class="dot"></div>
-                                    <div class="dot"></div>
-                                    <div class="dot"></div>
-                                </div>
-                            </div>
-                            <div class="chat-input">
-                                <div class="message-input-wrapper">
-                                    <input 
-                                        type="text" 
-                                        id="messageInput" 
-                                        class="form-control message-input" 
-                                        placeholder="Type a message..."
-                                        maxlength="1000"
-                                        autocomplete="off"
-                                    />
-                                </div>
-                                <button id="sendMessage" class="btn btn-primary send-btn" disabled>
-                                    <span class="btn-icon">SEND</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Calls Tab -->
-                <div class="tab-panel" id="callTab">
-                    <div class="call-container">
-                        <!-- Call Controls -->
-                        <div class="call-controls">
-                            <div class="call-buttons">
-                                <button id="videoCallBtn" class="btn btn-primary call-btn">
-                                    <span class="btn-icon">VIDEO</span>
-                                    Start Video Call
-                                </button>
-                                <button id="voiceCallBtn" class="btn btn-secondary call-btn">
-                                    <span class="btn-icon">AUDIO</span>
-                                    Start Voice Call
-                                </button>
-                            </div>
-                            
-                            <div class="active-call-controls" style="display: none;">
-                                <button id="muteBtn" class="btn btn-warning control-btn">
-                                    <span class="btn-icon">MIC</span>
-                                    Mute
-                                </button>
-                                <button id="videoToggleBtn" class="btn btn-info control-btn">
-                                    <span class="btn-icon">CAM</span>
-                                    Video Off
-                                </button>
-                                <button id="endCallBtn" class="btn btn-error control-btn">
-                                    <span class="btn-icon">END</span>
-                                    End Call
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Video Call Container -->
-                        <div id="videoContainer" class="video-container" style="display: none;">
-                            <div class="video-main">
-                                <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
-                                <video id="localVideo" class="local-video" autoplay playsinline muted></video>
-                            </div>
-                        </div>
-
-                        <!-- Voice Call Container -->
-                        <div id="voiceContainer" class="voice-container" style="display: none;">
-                            <div class="voice-visualizer">
-                                <div class="call-status">
-                                    <div class="status-text">Voice Call Active</div>
-                                    <div class="call-duration" id="callDuration">00:00</div>
-                                </div>
-                            </div>
-                            <audio id="remoteAudio" autoplay></audio>
-                        </div>
                     </div>
                 </div>
             </main>
