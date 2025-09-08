@@ -581,7 +581,7 @@ class P2PFileShare {
     }
 
     const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const CHUNK_SIZE = 500 * 1024;
+    const CHUNK_SIZE = 16 * 1024;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
     this.fileTransfers[transferId] = {
@@ -591,7 +591,7 @@ class P2PFileShare {
         totalChunks: totalChunks,
         nextChunkIndex: 0,
         chunksAcked: new Set(),
-        windowSize: 4,
+        windowSize: 64,
         inFlight: 0,
         startTime: Date.now(),
         lastAckTime: Date.now(),
