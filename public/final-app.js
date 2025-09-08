@@ -737,11 +737,6 @@ class P2PFileShare {
     if (transfer.receivedChunks === transfer.totalChunks) {
       this.assembleAndDownloadFile(chunkData.transferId);
     }
-    console.log(`Receiver: Assembling file ${transfer.name}. Expected total chunks: ${transfer.totalChunks}. Actual chunks in array: ${transfer.chunks.filter(c => c !== undefined).length}. Expected size: ${transfer.size} bytes.`);
-    const blob = new Blob(transfer.chunks.filter(c => c !== undefined), {
-      type: transfer.mimeType || 'application/octet-stream'
-    });
-    console.log(`Receiver: Assembled blob of size ${blob.size} bytes. Expected size: ${transfer.size} bytes.`);
   }
 
   assembleAndDownloadFile(transferId) {
