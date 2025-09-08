@@ -6,7 +6,7 @@ class P2PFileShare {
     this.isConnected = false;
     
     this.dataChannels = [];
-    // this.NUM_CHANNELS = 8; // Now set dynamically
+    this.NUM_CHANNELS = 8;
     this.channelsReady = 0;
 
     // File transfer state
