@@ -576,80 +576,59 @@ class P2PFileShare {
 
   async sendFile(file) {
     if (!this.connection || !this.isConnected) {
-        this.notify('No active connection', 'error');
-        return;
+      this.notify('No active connection', 'error');
+      return;
     }
 
     const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const CHUNK_SIZE = 16 * 1024;
+    const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-    this.fileTransfers[transferId] = {
-        file: file,
-        transferId: transferId,
-        chunkSize: CHUNK_SIZE,
-        totalChunks: totalChunks,
-        nextChunkIndex: 0,
-        chunksAcked: new Set(),
-        windowSize: 64,
-        inFlight: 0,
-        startTime: Date.now(),
-        lastAckTime: Date.now(),
-        bytesAcked: 0,
-        retransmits: {}
-    };
-
     const metadata = {
-        type: 'file-metadata',
-        transferId: transferId,
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
-        lastModified: file.lastModified,
-        totalChunks: totalChunks
+      type: 'file-metadata',
+      transferId: transferId,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+      lastModified: file.lastModified,
+      totalChunks: totalChunks,
+      chunkSize: CHUNK_SIZE
     };
     this.connection.send(metadata);
-    this.updateStatus(`Starting transfer of ${file.name}...`);
+    this.updateStatus(`Sending ${file.name}...`);
 
-    this.sendNextChunk(transferId);
-  }
-
-  sendNextChunk(transferId) {
-      const transfer = this.fileTransfers[transferId];
-      if (!transfer) return;
-
-      while (transfer.inFlight < transfer.windowSize && transfer.nextChunkIndex < transfer.totalChunks) {
-          this.sendChunk(transferId, transfer.nextChunkIndex);
-          transfer.nextChunkIndex++;
-      }
-  }
-
-  async sendChunk(transferId, chunkIndex) {
-      const transfer = this.fileTransfers[transferId];
-      if (!transfer || transfer.chunksAcked.has(chunkIndex)) {
-          return;
-      }
-
-      const start = chunkIndex * transfer.chunkSize;
-      const end = Math.min(start + transfer.chunkSize, transfer.file.size);
-      const chunk = transfer.file.slice(start, end);
+    let startTime = Date.now();
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
       const arrayBuffer = await chunk.arrayBuffer();
 
       const chunkData = {
-          type: 'file-chunk',
-          transferId: transferId,
-          chunkIndex: chunkIndex,
-          data: arrayBuffer
+        type: 'file-chunk',
+        transferId: transferId,
+        chunkIndex: i,
+        data: arrayBuffer
       };
 
-      this.connection.send(chunkData);
-      transfer.inFlight++;
+      try {
+        this.connection.send(chunkData);
+        const progress = (((i + 1) / totalChunks) * 100).toFixed(1);
+        this.updateProgressUI(progress);
+        const timeElapsed = (Date.now() - startTime) / 1000;
+        if (timeElapsed > 0) {
+            const speed = ( (i + 1) * CHUNK_SIZE / timeElapsed) / (1024 * 1024);
+            this.updateSpeedUI(speed);
+        }
 
-      transfer.retransmits[chunkIndex] = setTimeout(() => {
-          console.log(`Chunk ${chunkIndex} timed out, retransmitting...`);
-          transfer.inFlight--;
-          this.sendChunk(transferId, chunkIndex);
-      }, 10000);
+      } catch (error) {
+        console.error(`Failed to send chunk ${i}:`, error);
+        this.notify(`Error sending file. Please try again.`, 'error');
+        return;
+      }
+    }
+    this.updateStatus(`${file.name} sent successfully!`);
+    this.notify('File sent successfully', 'success');
   }
 
   handleReceivedData(data) {
@@ -662,47 +641,9 @@ class P2PFileShare {
       case 'file-chunk':
         this.handleFileChunk(data);
         break;
-      case 'file-chunk-ack':
-        this.handleFileChunkAck(data);
-        break;
       default:
         console.log('Unknown data type:', data.type);
     }
-  }
-
-  handleFileChunkAck(ackData) {
-      const { transferId, chunkIndex } = ackData;
-      const transfer = this.fileTransfers[transferId];
-      if (!transfer || transfer.chunksAcked.has(chunkIndex)) {
-          return;
-      }
-
-      clearTimeout(transfer.retransmits[chunkIndex]);
-      delete transfer.retransmits[chunkIndex];
-
-      transfer.inFlight--;
-      transfer.chunksAcked.add(chunkIndex);
-      transfer.bytesAcked += transfer.chunkSize;
-
-      const now = Date.now();
-      const timeElapsed = (now - transfer.lastAckTime) / 1000;
-      if (timeElapsed > 0.5) {
-          const speed = (transfer.chunkSize / timeElapsed) / 1024;
-          this.updateSpeedUI(speed);
-          transfer.lastAckTime = now;
-      }
-
-      const progress = (transfer.chunksAcked.size / transfer.totalChunks * 100).toFixed(1);
-      this.updateProgressUI(progress);
-
-      if (transfer.chunksAcked.size === transfer.totalChunks) {
-          this.updateStatus(`${transfer.file.name} sent successfully!`);
-          this.notify('File sent successfully', 'success');
-          this.updateSpeedUI(0);
-          delete this.fileTransfers[transferId];
-      } else {
-          this.sendNextChunk(transferId);
-      }
   }
 
   handleFileMetadata(metadata) {
@@ -726,15 +667,16 @@ class P2PFileShare {
       return;
     }
 
+    if (!transfer.chunks) {
+        transfer.chunks = [];
+    }
+    
     transfer.chunks[chunkData.chunkIndex] = new Uint8Array(chunkData.data);
+    
+    if (!transfer.receivedChunks) {
+        transfer.receivedChunks = 0;
+    }
     transfer.receivedChunks++;
-
-    this.connection.send({
-        type: 'file-chunk-ack',
-        transferId: chunkData.transferId,
-        chunkIndex: chunkData.chunkIndex,
-        receivedAt: Date.now()
-    });
 
     const progress = (transfer.receivedChunks / transfer.totalChunks * 100).toFixed(1);
     this.updateProgressUI(progress);
@@ -823,7 +765,7 @@ class P2PFileShare {
   updateSpeedUI(speed) {
     const speedEl = document.getElementById('transferSpeed');
     if (speedEl) {
-        speedEl.textContent = `${speed.toFixed(1)} KB/s`;
+        speedEl.textContent = `${speed.toFixed(2)} MB/s`;
     }
   }
 
