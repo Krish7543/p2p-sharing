@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sendify - Ultimate P2P Communication Platform</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+</head>
+<body data-color-scheme="dark">
+    <!-- Homepage Screen -->
+    <div class="screen" id="homeScreen">
+        <div class="home-container">
+            <!-- Animated Background -->
+            <div class="animated-background">
+                <div class="gradient-orb orb-1"></div>
+                <div class="gradient-orb orb-2"></div>
+                <div class="gradient-orb orb-3"></div>
+                <div class="gradient-orb orb-4"></div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="home-content">
+                <!-- Logo Section -->
+                <div class="logo-section">
+                    <div class="gradient-logo">
+                        <h1 class="logo-text">Sendify</h1>
+                        <div class="logo-tagline">Ultimate P2P Communication</div>
+                    </div>
+                </div>
+
+                <!-- Connection Panel -->
+                <div class="connection-panel">
+                    <div class="glass-card">
+                        <div class="connection-grid">
+                            <div class="left-connection">
+                                <div class="connection-section">
+                                    <h2>Your Connection Code</h2>
+                                    <div class="connection-status" id="connectionStatus">
+                                        <div class="status-indicator waiting"></div>
+                                        <span>Connecting to Network...</span>
+                                    </div>
+                                    <div class="code-display">
+                                        <div class="code-card">
+                                            <div class="code-value" id="connectionCode">CONNECTING</div>
+                                        </div>
+                                        <button id="copyCode" class="btn btn-gradient" disabled>
+                                            Copy Code
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="divider">
+                                    <span>OR</span>
+                                </div>
+
+                                <div class="connection-section">
+                                    <h2>Connect to Peer</h2>
+                                    <form id="connectForm" class="connection-form">
+                                        <div class="connection-input">
+                                            <input 
+                                                type="text" 
+                                                id="peerCode" 
+                                                class="form-control glass-input" 
+                                                placeholder="Enter 12-character code"
+                                                maxlength="12"
+                                                pattern="[A-F0-9]{12}"
+                                                title="Please enter a valid 12-character code"
+                                                required
+                                                disabled
+                                            >
+                                            <button type="submit" id="connectBtn" class="btn btn-primary-gradient btn--full-width" disabled>
+                                                Connect
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                            
+                            <div class="qr-section">
+                                <h2>Scan to Connect</h2>
+                                <div class="qr-box">
+                                    <div id="qrCode"></div>
+                                    <div class="qr-caption">Scan to open with code</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Features Box -->
+                    <div class="glass-card" style="margin-top: 1rem;">
+                        <div class="feature-badges">
+                            <span class="badge">Unlimited Files</span>
+                            <span class="badge">Real-time Chat</span>
+                            <span class="badge">Video Calls</span>
+                            <span class="badge">Voice Calls</span>
+                        </div>
+                    </div>
+
+                    <!-- Connection Info -->
+                    <div class="connection-info">
+                        <p>Share your code with anyone to establish a secure, direct connection</p>
+                        <div class="server-status">
+                            <span id="serverEndpoint">Connecting...</span>
+                            <div class="status-dot" id="serverStatus"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Communication Hub Screen -->
+    <div class="screen hidden" id="hubScreen">
+        <div class="hub-container">
+            <!-- Header -->
+            <header class="hub-header">
+                <div class="header-content">
+                    <div class="header-left">
+                        <div class="logo-mini">Sendify</div>
+                        <div class="tabs">
+                            <button class="tab-btn active" data-tab="filesTab">
+                                <span class="tab-icon">FILES</span>
+                                <span class="tab-label">Files</span>
+                            </button>
+                            <button class="tab-btn" data-tab="chatTab">
+                                <span class="tab-icon">CHAT</span>
+                                <span class="tab-label">Chat</span>
+                            </button>
+                            <button class="tab-btn" data-tab="callTab">
+                                <span class="tab-icon">CALL</span>
+                                <span class="tab-label">Calls</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="connection-info">
+                            <span class="peer-id" id="connectedPeerId">Connected to: LOADING</span>
+                            <div class="connection-quality">
+                                <div class="quality-indicator" id="qualityIndicator">
+                                    <div class="quality-bar">
+                                        <div class="quality-fill" id="qualityFill"></div>
+                                    </div>
+                                    <span id="qualityText">Excellent</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="disconnectBtn" class="disconnect-btn">
+                            <span class="btn-icon">DISC</span>
+                            <span class="btn-text">Disconnect</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="tab-content">
+                <!-- File Transfer Tab -->
+                <div class="tab-panel active" id="filesTab">
+                    <div class="file-transfer-container">
+                        <!-- Left Panel - File Drop Zone -->
+                        <div class="file-transfer-main">
+                            <div class="file-drop-container">
+                                <div class="file-drop-zone" id="fileDropZone">
+                                    <div class="drop-zone-content">
+                                        <div class="drop-zone-icon">FILES</div>
+                                        <div class="drop-zone-text">
+                                            <h4>Drag & Drop Files Here</h4>
+                                            <p>or click to select files</p>
+                                        </div>
+                                    </div>
+                                    <input type="file" id="fileInput" multiple style="display: none;">
+                                </div>
+                                <button class="file-upload-btn" id="selectFilesBtn">
+                                    <span class="btn-icon">SELECT</span>
+                                    Choose Files
+                                </button>
+                            </div>
+
+                            <!-- File Queue -->
+                            <div class="file-queue" id="fileQueue">
+                                <div class="queue-header">
+                                    <h4>Ready to Send</h4>
+                                </div>
+                                <div class="file-list" id="fileList">
+                                    <div class="empty-state">No files selected</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel - Transfer Status -->
+                        <div class="transfer-status-panel">
+                            <div class="transfer-card">
+                                <div class="transfer-card__header">
+                                    <h4>Transfer Status</h4>
+                                </div>
+                                <div class="transfer-card__body">
+                                    <div class="transfer-details">
+                                        <div class="transfer-icon">SEND</div>
+                                        <div class="transfer-info">
+                                            <div class="transfer-title" id="transferAction">Ready</div>
+                                            <div class="transfer-subtitle" id="transferFileName">No active transfers</div>
+                                        </div>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" id="progressFill"></div>
+                                    </div>
+                                    <div class="progress-meta">
+                                        <span id="progressPercent">0%</span>
+                                        <span class="dot">•</span>
+                                        <span id="progressFiles">Ready</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Transfer History -->
+                            <div class="history-section">
+                                <div class="section-header">
+                                    <h4>Transfer History</h4>
+                                </div>
+                                <div class="transfer-history" id="transferHistory">
+                                    <div class="empty-state">No transfer history yet</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Tab -->
+                <div class="tab-panel" id="chatTab">
+                    <div class="chat-container">
+                        <div class="chat-header">
+                            <h4>Chat with Peer</h4>
+                            <div class="chat-actions">
+                                <button id="clearChat" class="chat-action-btn" title="Clear chat">
+                                    <span class="btn-icon">CLEAR</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="welcome-message">
+                                <div class="welcome-content">
+                                    <div class="welcome-icon">CHAT</div>
+                                    <h3>Start a conversation</h3>
+                                    <p>Send a message to start chatting with your peer</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-container">
+                            <div class="typing-indicator hidden" id="typingIndicator">
+                                <span>Peer is typing...</span>
+                                <div class="typing-dots">
+                                    <div class="dot"></div>
+                                    <div class="dot"></div>
+                                    <div class="dot"></div>
+                                </div>
+                            </div>
+                            <div class="chat-input">
+                                <div class="message-input-wrapper">
+                                    <input 
+                                        type="text" 
+                                        id="messageInput" 
+                                        class="form-control message-input" 
+                                        placeholder="Type a message..."
+                                        maxlength="1000"
+                                        autocomplete="off"
+                                    />
+                                </div>
+                                <button id="sendMessage" class="btn btn-primary send-btn" disabled>
+                                    <span class="btn-icon">SEND</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calls Tab -->
+                <div class="tab-panel" id="callTab">
+                    <div class="call-container">
+                        <!-- Call Controls -->
+                        <div class="call-controls">
+                            <div class="call-buttons">
+                                <button id="videoCallBtn" class="btn btn-primary call-btn">
+                                    <span class="btn-icon">VIDEO</span>
+                                    Start Video Call
+                                </button>
+                                <button id="voiceCallBtn" class="btn btn-secondary call-btn">
+                                    <span class="btn-icon">AUDIO</span>
+                                    Start Voice Call
+                                </button>
+                            </div>
+                            
+                            <div class="active-call-controls" style="display: none;">
+                                <button id="muteBtn" class="btn btn-warning control-btn">
+                                    <span class="btn-icon">MIC</span>
+                                    Mute
+                                </button>
+                                <button id="videoToggleBtn" class="btn btn-info control-btn">
+                                    <span class="btn-icon">CAM</span>
+                                    Video Off
+                                </button>
+                                <button id="endCallBtn" class="btn btn-error control-btn">
+                                    <span class="btn-icon">END</span>
+                                    End Call
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Video Call Container -->
+                        <div id="videoContainer" class="video-container" style="display: none;">
+                            <div class="video-main">
+                                <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+                                <video id="localVideo" class="local-video" autoplay playsinline muted></video>
+                            </div>
+                        </div>
+
+                        <!-- Voice Call Container -->
+                        <div id="voiceContainer" class="voice-container" style="display: none;">
+                            <div class="voice-visualizer">
+                                <div class="call-status">
+                                    <div class="status-text">Voice Call Active</div>
+                                    <div class="call-duration" id="callDuration">00:00</div>
+                                </div>
+                            </div>
+                            <audio id="remoteAudio" autoplay></audio>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="notification-container" id="notifications"></div>
+    
+    <script src="final-app.js"></script>
+</body>
+</html>
