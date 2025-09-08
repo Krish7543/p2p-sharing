@@ -649,7 +649,7 @@ class P2PFileShare {
           console.log(`Chunk ${chunkIndex} timed out, retransmitting...`);
           transfer.inFlight--;
           this.sendChunk(transferId, chunkIndex);
-      }, 5000);
+      }, 10000);
   }
 
   handleReceivedData(data) {
