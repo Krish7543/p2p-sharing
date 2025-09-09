@@ -89,6 +89,10 @@ class P2PFileShare {
         case 'connection-rejected':
           this.handleConnectionRejected(message.fromCode);
           break;
+        case 'file-transfer-confirmed':
+          this.notify(`File transfer for ${message.transferId} confirmed by receiver!`, 'success');
+          // Optionally, update UI elements related to the specific transferId on the sender side
+          break;
         default:
           console.log('Unknown WebSocket message:', message);
       }
@@ -700,6 +704,7 @@ class P2PFileShare {
       mimeType: metadata.mimeType,
       chunks: [],
       receivedChunks: 0,
+      receivedChunkIndices: new Set(), // Initialize as a Set
       totalChunks: metadata.totalChunks
     };
 
@@ -767,6 +772,13 @@ class P2PFileShare {
       this.updateTransferCard('Downloaded', transfer.name);
       this.addToTransferHistory(transfer);
       
+      // Send confirmation to the sender via WebSocket
+      this.sendWebSocketMessage({
+        type: 'file-transfer-confirmed',
+        transferId: transferId,
+        targetCode: this.dataChannels[0].peer // Assuming dataChannels[0] is connected to the sender
+      });
+
     } catch (error) {
       console.error('File assembly error:', error);
       this.notify('Failed to download file', 'error');

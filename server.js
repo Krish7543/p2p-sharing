@@ -151,6 +151,14 @@ function handleMessage(ws, senderCode, message) {
       }
       break;
       
+    case 'file-transfer-confirmed':
+      if (!targetCode) {
+        console.error('Missing targetCode for file-transfer-confirmed');
+        return;
+      }
+      relaySignalingMessage(senderCode, targetCode, message);
+      break;
+      
     default:
       console.log('Unknown message type:', type);
   }
