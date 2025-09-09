@@ -6,7 +6,7 @@ class P2PFileShare {
     this.isConnected = false;
     
     this.dataChannels = [];
-    this.NUM_CHANNELS = 8;
+    this.NUM_CHANNELS = 5; // Decreased from 50
     this.channelsReady = 0;
 
     // File transfer state
@@ -596,12 +596,27 @@ class P2PFileShare {
         totalChunks: totalChunks,
         nextChunkIndex: 0,
         chunksAcked: new Set(),
-        windowSize: 16,
+        windowSize: 16, // Reverted to 16
         inFlight: 0,
         startTime: Date.now(),
         bytesAcked: 0,
         retransmits: {},
-        status: 'sending' // Add status
+        status: 'sending', // Add status
+        // RTT/RTO related properties
+        sendTimes: {}, // To store send time of each chunk
+        estimatedRTT: 5000, // Initial RTT estimate (5 seconds)
+        devRTT: 0,
+        retransmissionTimeout: 5000, // Initial RTO (5 seconds)
+        alpha: 0.125, // For RTT estimation (TCP's alpha)
+        beta: 0.25,   // For RTT estimation (TCP's beta)
+        minRTO: 1000, // Minimum RTO (1 second)
+        maxRTO: 60000, // Maximum RTO (60 seconds)
+        // Congestion Control related properties
+        congestionWindow: 1, // Initial congestion window (in chunks)
+        slowStartThreshold: Infinity, // Initially no threshold, always slow start
+        duplicateAcks: 0,
+        lastAckedChunkIndex: -1, // Highest chunk index acknowledged so far
+        ssthresh: 64 // Initial slow start threshold (arbitrary, can be tuned)
     };
 
     const metadata = {
@@ -624,7 +639,8 @@ class P2PFileShare {
       const transfer = this.fileTransfers[transferId];
       if (!transfer) return;
 
-      while (transfer.inFlight < transfer.windowSize && transfer.nextChunkIndex < transfer.totalChunks) {
+      // Only send if inFlight is less than congestionWindow
+      while (transfer.inFlight < Math.floor(transfer.congestionWindow) && transfer.nextChunkIndex < transfer.totalChunks) {
           this.sendChunk(transferId, transfer.nextChunkIndex);
           transfer.nextChunkIndex++;
       }
@@ -651,12 +667,13 @@ class P2PFileShare {
       const channelIndex = chunkIndex % this.NUM_CHANNELS;
       this.dataChannels[channelIndex].send(chunkData);
       transfer.inFlight++;
+      transfer.sendTimes[chunkIndex] = Date.now(); // Store send time
 
       transfer.retransmits[chunkIndex] = setTimeout(() => {
           console.log(`Chunk ${chunkIndex} timed out, retransmitting...`);
           transfer.inFlight--;
           this.sendChunk(transferId, chunkIndex);
-      }, 5000);
+      }, transfer.retransmissionTimeout); // Use dynamic RTO
   }
 
   handleReceivedData(data) {
@@ -680,16 +697,75 @@ class P2PFileShare {
   handleFileChunkAck(ackData) {
       const { transferId, chunkIndex } = ackData;
       const transfer = this.fileTransfers[transferId];
-      if (!transfer || transfer.chunksAcked.has(chunkIndex)) {
-          return;
+      if (!transfer) return;
+
+      // If this chunk has already been acknowledged, it's a duplicate ACK
+      if (transfer.chunksAcked.has(chunkIndex)) {
+          // Handle duplicate ACKs for Fast Retransmit
+          if (chunkIndex === transfer.lastAckedChunkIndex) { // Only count duplicate ACKs for the highest acknowledged chunk
+              transfer.duplicateAcks++;
+              if (transfer.duplicateAcks === 3) { // Three duplicate ACKs trigger Fast Retransmit
+                  console.log(`Fast Retransmit triggered for chunk ${chunkIndex + 1}`);
+                  // Retransmit the next expected chunk (chunkIndex + 1)
+                  // This assumes chunkIndex is the highest acknowledged, and we need the next one
+                  // For simplicity, we'll retransmit the chunk that is likely lost (chunkIndex + 1)
+                  // We need to ensure we don't retransmit a chunk that is already in flight or acknowledged
+                  const nextExpectedChunk = chunkIndex + 1;
+                  if (!transfer.chunksAcked.has(nextExpectedChunk) && !transfer.retransmits[nextExpectedChunk]) {
+                      this.sendChunk(transferId, nextExpectedChunk);
+                  }
+                  // Enter Fast Recovery: halve congestion window, set ssthresh
+                  transfer.ssthresh = Math.max(Math.floor(transfer.congestionWindow / 2), 1);
+                  transfer.congestionWindow = transfer.ssthresh + 3; // cwnd = ssthresh + 3 * MSS
+              } else if (transfer.duplicateAcks > 3) {
+                  transfer.congestionWindow++; // Inflate window for each additional duplicate ACK
+              }
+          }
+          return; // Already acknowledged, no further processing for this chunk
       }
 
+      // This is a new ACK
       clearTimeout(transfer.retransmits[chunkIndex]);
       delete transfer.retransmits[chunkIndex];
+      delete transfer.sendTimes[chunkIndex]; // Clean up send time
 
       transfer.inFlight--;
       transfer.chunksAcked.add(chunkIndex);
       transfer.bytesAcked += transfer.chunkSize;
+
+      // Update lastAckedChunkIndex
+      if (chunkIndex > transfer.lastAckedChunkIndex) {
+          transfer.lastAckedChunkIndex = chunkIndex;
+      }
+
+      // Reset duplicate ACKs
+      transfer.duplicateAcks = 0;
+
+      // --- DRTO Calculation ---
+      const sampleRTT = Date.now() - transfer.sendTimes[chunkIndex]; // Use original send time for RTT
+      if (sampleRTT < 0) { // Should not happen, but for safety
+          console.warn(`Negative sampleRTT for chunk ${chunkIndex}. Ignoring.`);
+      } else {
+          if (transfer.estimatedRTT === 5000 && transfer.devRTT === 0) { // First sample
+              transfer.estimatedRTT = sampleRTT;
+              transfer.devRTT = sampleRTT / 2;
+          } else {
+              transfer.estimatedRTT = (1 - transfer.alpha) * transfer.estimatedRTT + transfer.alpha * sampleRTT;
+              transfer.devRTT = (1 - transfer.beta) * transfer.devRTT + transfer.beta * Math.abs(sampleRTT - transfer.estimatedRTT);
+          }
+          transfer.retransmissionTimeout = Math.max(transfer.minRTO, Math.min(transfer.maxRTO, transfer.estimatedRTT + 4 * transfer.devRTT));
+      }
+      // --- End DRTO Calculation ---
+
+      // --- Congestion Control (Slow Start / Congestion Avoidance) ---
+      if (transfer.congestionWindow < transfer.ssthresh) {
+          // Slow Start: Increase cwnd by 1 for each new ACK
+          transfer.congestionWindow++;
+      } else {
+          // Congestion Avoidance: Increase cwnd by 1/cwnd for each new ACK
+          transfer.congestionWindow += 1 / transfer.congestionWindow;
+      }
+      // --- End Congestion Control ---
 
       const totalTimeElapsed = (Date.now() - transfer.startTime) / 1000;
       if (totalTimeElapsed > 0) {
@@ -705,9 +781,8 @@ class P2PFileShare {
           this.updateStatus(`${transfer.file.name} sent. Awaiting receiver confirmation...`);
           this.notify('File sent, awaiting confirmation', 'info');
           this.updateSpeedUI(0);
-          // Do NOT delete this.fileTransfers[transferId] yet
       } else {
-          this.sendNextChunk(transferId);
+          this.sendNextChunk(transferId); // Try to send more chunks if window allows
       }
   }
 
