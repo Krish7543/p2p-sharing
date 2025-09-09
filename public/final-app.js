@@ -90,8 +90,21 @@ class P2PFileShare {
           this.handleConnectionRejected(message.fromCode);
           break;
         case 'file-transfer-confirmed':
-          this.notify(`File transfer for ${message.transferId} confirmed by receiver!`, 'success');
-          // Optionally, update UI elements related to the specific transferId on the sender side
+          const confirmedTransferId = message.transferId;
+          const confirmedTransfer = this.fileTransfers[confirmedTransferId];
+          if (confirmedTransfer) {
+            this.notify(`File ${confirmedTransfer.file.name} confirmed by receiver!`, 'success');
+            this.addToTransferHistory(confirmedTransfer.file); // Add to sender's history
+            delete this.fileTransfers[confirmedTransferId]; // Now delete from active transfers
+            // Update UI to reflect no active transfers if this was the last one
+            if (Object.keys(this.fileTransfers).length === 0) {
+                this.updateTransferCard('Ready', 'No active transfers');
+                this.updateProgressUI(0);
+            }
+          } else {
+            console.warn(`Sender: Received confirmation for unknown transfer ID: ${confirmedTransferId}`);
+            this.notify(`Transfer confirmed for ID ${confirmedTransferId}`, 'success'); // Still notify
+          }
           break;
         default:
           console.log('Unknown WebSocket message:', message);
@@ -587,7 +600,8 @@ class P2PFileShare {
         inFlight: 0,
         startTime: Date.now(),
         bytesAcked: 0,
-        retransmits: {}
+        retransmits: {},
+        status: 'sending' // Add status
     };
 
     const metadata = {
@@ -687,10 +701,11 @@ class P2PFileShare {
       this.updateProgressUI(progress);
 
       if (transfer.chunksAcked.size === transfer.totalChunks) {
-          this.updateStatus(`${transfer.file.name} sent successfully!`);
-          this.notify('File sent successfully', 'success');
+          transfer.status = 'sent_awaiting_confirmation';
+          this.updateStatus(`${transfer.file.name} sent. Awaiting receiver confirmation...`);
+          this.notify('File sent, awaiting confirmation', 'info');
           this.updateSpeedUI(0);
-          delete this.fileTransfers[transferId];
+          // Do NOT delete this.fileTransfers[transferId] yet
       } else {
           this.sendNextChunk(transferId);
       }
@@ -772,6 +787,10 @@ class P2PFileShare {
       this.updateTransferCard('Downloaded', transfer.name);
       this.addToTransferHistory(transfer);
       
+      // Reset progress UI after successful transfer
+      this.updateProgressUI(0);
+      this.updateTransferCard('Ready', 'No active transfers');
+
       // Send confirmation to the sender via WebSocket
       this.sendWebSocketMessage({
         type: 'file-transfer-confirmed',
