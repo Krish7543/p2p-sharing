@@ -6,7 +6,7 @@ class P2PFileShare {
     this.isConnected = false;
     
     this.dataChannels = [];
-    this.NUM_CHANNELS = 5; // Decreased from 50
+    this.NUM_CHANNELS = 16;
     this.channelsReady = 0;
 
     // File transfer state
@@ -209,6 +209,7 @@ class P2PFileShare {
         const conn = this.peer.connect(fromCode, {
             label: `ft_${i}`,
             reliable: true,
+            ordered: false,
             serialization: 'binary'
         });
         this.setupDataChannel(conn);
@@ -509,6 +510,16 @@ class P2PFileShare {
         this.dataChannels.push(conn);
         this.dataChannels.sort((a, b) => a.label.localeCompare(b.label));
         
+        conn.bufferedAmountLowThreshold = 16 * 1024; // Set threshold for flow control
+        conn.onbufferedamountlow = () => {
+            // Resume sending when buffer clears
+            for (const transferId in this.fileTransfers) {
+                if (this.fileTransfers.hasOwnProperty(transferId)) {
+                    this.processSendQueue(transferId);
+                }
+            }
+        };
+        
         if (this.dataChannels.length === this.NUM_CHANNELS) {
             this.isConnected = true;
             this.updateStatus('Connected! Ready to share files.');
@@ -586,7 +597,7 @@ class P2PFileShare {
     }
 
     const transferId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const CHUNK_SIZE = 256 * 1024;
+    const CHUNK_SIZE = 64 * 1024;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
     this.fileTransfers[transferId] = {
@@ -604,19 +615,21 @@ class P2PFileShare {
         status: 'sending', // Add status
         // RTT/RTO related properties
         sendTimes: {}, // To store send time of each chunk
-        estimatedRTT: 5000, // Initial RTT estimate (5 seconds)
+        estimatedRTT: 10000, // Initial RTT estimate (10 seconds)
         devRTT: 0,
-        retransmissionTimeout: 5000, // Initial RTO (5 seconds)
-        alpha: 0.125, // For RTT estimation (TCP's alpha)
-        beta: 0.25,   // For RTT estimation (TCP's beta)
-        minRTO: 1000, // Minimum RTO (1 second)
+        retransmissionTimeout: 10000, // Initial RTO (10 seconds) - will be dynamically updated
+        alpha: 0.25,   // For RTT estimation (TCP's alpha)
+        beta: 0.5,     // For RTT estimation (TCP's beta)
+        minRTO: 3000,  // Minimum RTO (3 seconds)
         maxRTO: 60000, // Maximum RTO (60 seconds)
         // Congestion Control related properties
         congestionWindow: 1, // Initial congestion window (in chunks)
         slowStartThreshold: Infinity, // Initially no threshold, always slow start
         duplicateAcks: 0,
         lastAckedChunkIndex: -1, // Highest chunk index acknowledged so far
-        ssthresh: 64 // Initial slow start threshold (arbitrary, can be tuned)
+        ssthresh: 32, // Initial slow start threshold (arbitrary, can be tuned)
+        sendQueue: [], // Queue for chunks waiting to be sent
+        sending: false, // Flag to indicate if sending is active
     };
 
     const metadata = {
@@ -639,11 +652,26 @@ class P2PFileShare {
       const transfer = this.fileTransfers[transferId];
       if (!transfer) return;
 
-      // Only send if inFlight is less than congestionWindow
-      while (transfer.inFlight < Math.floor(transfer.congestionWindow) && transfer.nextChunkIndex < transfer.totalChunks) {
-          this.sendChunk(transferId, transfer.nextChunkIndex);
+      // Enqueue chunks up to congestion window limit
+      while (transfer.sendQueue.length < Math.floor(transfer.congestionWindow) && transfer.nextChunkIndex < transfer.totalChunks) {
+          transfer.sendQueue.push(transfer.nextChunkIndex);
           transfer.nextChunkIndex++;
       }
+      this.processSendQueue(transferId);
+  }
+
+  async processSendQueue(transferId) {
+      const transfer = this.fileTransfers[transferId];
+      if (!transfer || transfer.sending) return;
+
+      transfer.sending = true;
+      const channel = this.dataChannels[0]; // Assuming first channel for sending, or distribute
+
+      while (transfer.sendQueue.length > 0 && channel.bufferedAmount < channel.bufferedAmountLowThreshold) {
+          const chunkIndex = transfer.sendQueue.shift(); // Get next chunk from queue
+          await this.sendChunk(transferId, chunkIndex);
+      }
+      transfer.sending = false;
   }
 
   async sendChunk(transferId, chunkIndex) {
@@ -670,9 +698,10 @@ class P2PFileShare {
       transfer.sendTimes[chunkIndex] = Date.now(); // Store send time
 
       transfer.retransmits[chunkIndex] = setTimeout(() => {
-          console.log(`Chunk ${chunkIndex} timed out, retransmitting...`);
-          transfer.inFlight--;
-          this.sendChunk(transferId, chunkIndex);
+          console.log(`Timeout Retransmit: Chunk ${chunkIndex} timed out, retransmitting...`);
+          // Instead of inFlight--, re-enqueue for retransmission
+          transfer.sendQueue.unshift(chunkIndex); // Add to front of queue for priority
+          this.processSendQueue(transferId); // Attempt to send immediately
       }, transfer.retransmissionTimeout); // Use dynamic RTO
   }
 
@@ -705,7 +734,7 @@ class P2PFileShare {
           if (chunkIndex === transfer.lastAckedChunkIndex) { // Only count duplicate ACKs for the highest acknowledged chunk
               transfer.duplicateAcks++;
               if (transfer.duplicateAcks === 3) { // Three duplicate ACKs trigger Fast Retransmit
-                  console.log(`Fast Retransmit triggered for chunk ${chunkIndex + 1}`);
+                  console.log(`Fast Retransmit: Triggered for chunk ${chunkIndex + 1}`);
                   // Retransmit the next expected chunk (chunkIndex + 1)
                   // This assumes chunkIndex is the highest acknowledged, and we need the next one
                   // For simplicity, we'll retransmit the chunk that is likely lost (chunkIndex + 1)
@@ -741,12 +770,14 @@ class P2PFileShare {
       // Reset duplicate ACKs
       transfer.duplicateAcks = 0;
 
+      
+
       // --- DRTO Calculation ---
       const sampleRTT = Date.now() - transfer.sendTimes[chunkIndex]; // Use original send time for RTT
       if (sampleRTT < 0) { // Should not happen, but for safety
           console.warn(`Negative sampleRTT for chunk ${chunkIndex}. Ignoring.`);
       } else {
-          if (transfer.estimatedRTT === 5000 && transfer.devRTT === 0) { // First sample
+          if (transfer.estimatedRTT === 10000 && transfer.devRTT === 0) { // First sample
               transfer.estimatedRTT = sampleRTT;
               transfer.devRTT = sampleRTT / 2;
           } else {
